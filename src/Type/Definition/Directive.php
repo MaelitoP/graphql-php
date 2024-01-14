@@ -22,16 +22,19 @@ class Directive
 {
     public const DEFAULT_DEPRECATION_REASON = 'No longer supported';
 
-    public const INCLUDE_NAME = 'include';
+    public const DIRECTIVE_INCLUDE_NAME = 'include';
+    public const DIRECTIVE_SKIP_NAME = 'skip';
+    public const DIRECTIVE_DEPRECATED_NAME = 'deprecated';
+    public const DIRECTIVE_DEFER_NAME = 'defer';
+
     public const IF_ARGUMENT_NAME = 'if';
-    public const SKIP_NAME = 'skip';
-    public const DEPRECATED_NAME = 'deprecated';
     public const REASON_ARGUMENT_NAME = 'reason';
+    public const LABEL_ARGUMENT_NAME = 'label';
 
     /**
      * Lazily initialized.
      *
-     * @var array<string, Directive>
+     * @var array<self::DIRECTIVE_*, Directive>
      */
     protected static array $internalDirectives;
 
@@ -75,24 +78,16 @@ class Directive
         $this->config = $config;
     }
 
-    /** @throws InvariantViolation */
-    public static function includeDirective(): Directive
-    {
-        $internal = self::getInternalDirectives();
-
-        return $internal['include'];
-    }
-
     /**
      * @throws InvariantViolation
      *
-     * @return array<string, Directive>
+     * @return array<self::DIRECTIVE_*, Directive>
      */
     public static function getInternalDirectives(): array
     {
         return self::$internalDirectives ??= [
-            'include' => new self([
-                'name' => self::INCLUDE_NAME,
+            self::DIRECTIVE_INCLUDE_NAME => new self([
+                'name' => self::DIRECTIVE_INCLUDE_NAME,
                 'description' => 'Directs the executor to include this field or fragment only when the `if` argument is true.',
                 'locations' => [
                     DirectiveLocation::FIELD,
@@ -106,8 +101,8 @@ class Directive
                     ],
                 ],
             ]),
-            'skip' => new self([
-                'name' => self::SKIP_NAME,
+            self::DIRECTIVE_SKIP_NAME => new self([
+                'name' => self::DIRECTIVE_SKIP_NAME,
                 'description' => 'Directs the executor to skip this field or fragment when the `if` argument is true.',
                 'locations' => [
                     DirectiveLocation::FIELD,
@@ -121,8 +116,8 @@ class Directive
                     ],
                 ],
             ]),
-            'deprecated' => new self([
-                'name' => self::DEPRECATED_NAME,
+            self::DIRECTIVE_DEPRECATED_NAME => new self([
+                'name' => self::DIRECTIVE_DEPRECATED_NAME,
                 'description' => 'Marks an element of a GraphQL schema as no longer supported.',
                 'locations' => [
                     DirectiveLocation::FIELD_DEFINITION,
@@ -138,7 +133,33 @@ class Directive
                     ],
                 ],
             ]),
+            self::DIRECTIVE_DEFER_NAME => new self([
+                'name' => self::DIRECTIVE_DEFER_NAME,
+                'description' => 'Directs the executor to defer this fragment when the `if` argument is true or undefined.',
+                'locations' => [
+                    DirectiveLocation::FRAGMENT_SPREAD,
+                    DirectiveLocation::INLINE_FRAGMENT,
+                ],
+                'args' => [
+                    self::LABEL_ARGUMENT_NAME => [
+                        'type' => Type::nonNull(Type::boolean()),
+                        'description' => 'Unique name',
+                    ],
+                    self::IF_ARGUMENT_NAME => [
+                        'type' => Type::nonNull(Type::boolean()),
+                        'description' => 'Deferred when true or undefined.',
+                    ],
+                ],
+            ]),
         ];
+    }
+
+    /** @throws InvariantViolation */
+    public static function includeDirective(): Directive
+    {
+        $internal = self::getInternalDirectives();
+
+        return $internal[self::DIRECTIVE_INCLUDE_NAME];
     }
 
     /** @throws InvariantViolation */
@@ -146,7 +167,7 @@ class Directive
     {
         $internal = self::getInternalDirectives();
 
-        return $internal['skip'];
+        return $internal[self::DIRECTIVE_SKIP_NAME];
     }
 
     /** @throws InvariantViolation */
@@ -154,7 +175,15 @@ class Directive
     {
         $internal = self::getInternalDirectives();
 
-        return $internal['deprecated'];
+        return $internal[self::DIRECTIVE_DEPRECATED_NAME];
+    }
+
+    /** @throws InvariantViolation */
+    public static function deferDirective(): Directive
+    {
+        $internal = self::getInternalDirectives();
+
+        return $internal[self::DIRECTIVE_DEFER_NAME];
     }
 
     /** @throws InvariantViolation */

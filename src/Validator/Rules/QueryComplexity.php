@@ -167,7 +167,7 @@ class QueryComplexity extends QuerySecurityRule
     protected function directiveExcludesField(FieldNode $node): bool
     {
         foreach ($node->directives as $directiveNode) {
-            if ($directiveNode->name->value === Directive::DEPRECATED_NAME) {
+            if ($directiveNode->name->value === Directive::DIRECTIVE_DEPRECATED_NAME) {
                 return false;
             }
 
@@ -186,7 +186,7 @@ class QueryComplexity extends QuerySecurityRule
                 ));
             }
 
-            if ($directiveNode->name->value === Directive::INCLUDE_NAME) {
+            if ($directiveNode->name->value === Directive::DIRECTIVE_INCLUDE_NAME) {
                 $includeArguments = Values::getArgumentValues(
                     Directive::includeDirective(),
                     $directiveNode,
@@ -197,7 +197,7 @@ class QueryComplexity extends QuerySecurityRule
                 return ! $includeArguments['if'];
             }
 
-            if ($directiveNode->name->value === Directive::SKIP_NAME) {
+            if ($directiveNode->name->value === Directive::DIRECTIVE_SKIP_NAME) {
                 $skipArguments = Values::getArgumentValues(
                     Directive::skipDirective(),
                     $directiveNode,
