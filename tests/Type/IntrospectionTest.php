@@ -962,6 +962,42 @@ final class IntrospectionTest extends TestCase
                                 3 => 'INPUT_FIELD_DEFINITION',
                             ],
                         ],
+                        [
+                            'name' => 'defer',
+                            'args' => [
+                                0 => [
+                                    'name' => 'label',
+                                    'type' => [
+                                        'kind' => 'NON_NULL',
+                                        'name' => null,
+                                        'ofType' => [
+                                            'kind' => 'SCALAR',
+                                            'name' => 'String',
+                                            'ofType' => null,
+                                        ],
+                                    ],
+                                    'defaultValue' => null,
+                                    'isDeprecated' => false,
+                                    'deprecationReason' => null,
+                                ],
+                                1 => [
+                                    'name' => 'if',
+                                    'type' => [
+                                        'kind' => 'SCALAR',
+                                        'name' => 'Boolean',
+                                        'ofType' => null,
+                                    ],
+                                    'defaultValue' => null,
+                                    'isDeprecated' => false,
+                                    'deprecationReason' => null,
+                                ],
+                            ],
+                            'isRepeatable' => false,
+                            'locations' => [
+                                0 => 'FRAGMENT_SPREAD',
+                                1 => 'INLINE_FRAGMENT',
+                            ],
+                        ],
                     ],
                 ],
             ],

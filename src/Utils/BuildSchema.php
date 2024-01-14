@@ -214,14 +214,22 @@ class BuildSchema
         }
 
         // If specified directives were not explicitly declared, add them.
-        if (! isset($directivesByName['include'])) {
+        if (! isset($directivesByName[Directive::DIRECTIVE_INCLUDE_NAME])) {
             $directives[] = Directive::includeDirective();
         }
-        if (! isset($directivesByName['skip'])) {
+        if (! isset($directivesByName[Directive::DIRECTIVE_SKIP_NAME])) {
             $directives[] = Directive::skipDirective();
         }
-        if (! isset($directivesByName['deprecated'])) {
+        if (! isset($directivesByName[Directive::DIRECTIVE_DEPRECATED_NAME])) {
             $directives[] = Directive::deprecatedDirective();
+        }
+        /**
+         * TODO:
+         *  This will add the defer directive by default into the schema.
+         *  We should add it only if user want to use it (schema config)
+         */
+        if (! isset($directivesByName[Directive::DIRECTIVE_DEFER_NAME])) {
+            $directives[] = Directive::deferDirective();
         }
 
         // Note: While this could make early assertions to get the correctly

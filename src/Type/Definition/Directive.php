@@ -142,11 +142,11 @@ class Directive
                 ],
                 'args' => [
                     self::LABEL_ARGUMENT_NAME => [
-                        'type' => Type::nonNull(Type::boolean()),
+                        'type' => Type::nonNull(Type::string()),
                         'description' => 'Unique name',
                     ],
                     self::IF_ARGUMENT_NAME => [
-                        'type' => Type::nonNull(Type::boolean()),
+                        'type' => Type::boolean(),
                         'description' => 'Deferred when true or undefined.',
                     ],
                 ],

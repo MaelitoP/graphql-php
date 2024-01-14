@@ -1010,6 +1010,15 @@ final class SchemaPrinterTest extends TestCase
         "Explains why this element was deprecated, usually also including a suggestion for how to access supported similar data. Formatted using the Markdown syntax, as specified by [CommonMark](https:\/\/commonmark.org\/)."
         reason: String = "No longer supported"
       ) on FIELD_DEFINITION | ENUM_VALUE | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
+      
+      "Directs the executor to defer this fragment when the `if` argument is true or undefined."
+      directive @defer(
+        "Unique name"
+        label: String!
+
+        "Deferred when true or undefined."
+        if: Boolean
+      ) on FRAGMENT_SPREAD | INLINE_FRAGMENT
 
       "A GraphQL Schema defines the capabilities of a GraphQL server. It exposes all available types and directives on the server, as well as the entry points for query, mutation, and subscription operations."
       type __Schema {

@@ -1329,7 +1329,11 @@ final class BreakingChangesFinderTest extends TestCase
         $oldSchema = new Schema([]);
 
         $newSchema = new Schema([
-            'directives' => [Directive::skipDirective(), Directive::includeDirective()],
+            'directives' => [
+                Directive::skipDirective(),
+                Directive::includeDirective(),
+                Directive::deferDirective(),
+            ],
         ]);
 
         $deprecatedDirective = Directive::deprecatedDirective();
