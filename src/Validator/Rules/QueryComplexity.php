@@ -207,6 +207,17 @@ class QueryComplexity extends QuerySecurityRule
 
                 return $skipArguments['if'];
             }
+
+            if ($directiveNode->name->value === Directive::DIRECTIVE_DEFER_NAME) {
+                $deferArguments = Values::getArgumentValues(
+                    Directive::deferDirective(),
+                    $directiveNode,
+                    $variableValues
+                );
+                assert(is_bool($deferArguments['if']), 'ensured by query validation');
+
+                return $deferArguments['if'];
+            }
         }
 
         return false;

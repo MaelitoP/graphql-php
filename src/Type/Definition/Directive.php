@@ -146,8 +146,9 @@ class Directive
                         'description' => 'Unique name',
                     ],
                     self::IF_ARGUMENT_NAME => [
-                        'type' => Type::boolean(),
+                        'type' => Type::nonNull(Type::boolean()),
                         'description' => 'Deferred when true or undefined.',
+                        'defaultValue' => true,
                     ],
                 ],
             ]),
