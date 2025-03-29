@@ -47,6 +47,11 @@ class ExecutionContext
     public PromiseAdapter $promiseAdapter;
 
     /**
+     * Executor for deferred fragments.
+     */
+    public DeferredFragmentExecutor $deferredFragmentExecutor;
+
+    /**
      * @param array<string, FragmentDefinitionNode> $fragments
      * @param mixed                                 $rootValue
      * @param mixed                                 $contextValue
@@ -75,6 +80,7 @@ class ExecutionContext
         $this->errors = $errors;
         $this->fieldResolver = $fieldResolver;
         $this->promiseAdapter = $promiseAdapter;
+        $this->deferredFragmentExecutor = new DeferredFragmentExecutor();
     }
 
     public function addError(Error $error): void

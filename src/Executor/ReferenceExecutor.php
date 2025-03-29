@@ -17,6 +17,7 @@ use GraphQL\Language\AST\OperationDefinitionNode;
 use GraphQL\Language\AST\SelectionNode;
 use GraphQL\Language\AST\SelectionSetNode;
 use GraphQL\Type\Definition\AbstractType;
+use GraphQL\Type\Definition\DeferUsage;
 use GraphQL\Type\Definition\Directive;
 use GraphQL\Type\Definition\FieldDefinition;
 use GraphQL\Type\Definition\InterfaceType;
@@ -269,7 +270,97 @@ class ReferenceExecutor implements ExecutorImplementation
             $data = (array) $data;
         }
 
+        $deferredExecutor = $this->exeContext->deferredFragmentExecutor;
+        
+        // If there are deferred fragments, add the pending information to the result
+        if ($deferredExecutor->hasPendingFragments()) {
+            $pending = $deferredExecutor->generatePendingList();
+            return new ExecutionResult($data, $this->exeContext->errors, [], $pending, true);
+        }
+
         return new ExecutionResult($data, $this->exeContext->errors);
+    }
+
+    /**
+     * Executes a deferred fragment and returns an incremental result.
+     *
+     * @param string $id The ID of the fragment to execute
+     * 
+     * @return IncrementalResult|Promise
+     */
+    public function executeDeferredFragment(string $id)
+    {
+        $deferredExecutor = $this->exeContext->deferredFragmentExecutor;
+        $fragment = $deferredExecutor->getFragment($id);
+        
+        if ($fragment === null) {
+            // Fragment not found
+            $result = new IncrementalResult();
+            $result->addData($id, null);
+            $result->markCompleted($id);
+            $result->setHasNext($deferredExecutor->hasPendingFragments());
+            return $result;
+        }
+        
+        // Execute the deferred fragment against the parent data
+        $data = $fragment['data'];
+        $type = $fragment['type'];
+        $path = $fragment['path'];
+        $usage = $fragment['usage'];
+        
+        if (!$usage->selectionSet) {
+            // If no selection set is available, return null data
+            $result = new IncrementalResult();
+            $result->addData($id, null);
+            $result->markCompleted($id);
+            $result->setHasNext($deferredExecutor->hasPendingFragments());
+            return $result;
+        }
+        
+        // Create a fieldNodes ArrayObject from the fragment's selection set
+        $fieldsContainer = new \ArrayObject();
+        $visitedFragmentNames = new \ArrayObject();
+        
+        // Use collectFields to populate fields from the fragment's selection set
+        $fields = $this->collectFields(
+            $type, 
+            $usage->selectionSet, 
+            $fieldsContainer, 
+            $visitedFragmentNames, 
+            $usage->parent, // Use the parent defer usage
+            null // No current defer usage since we're executing it
+        );
+        
+        // Execute the fields
+        $resultData = $this->executeFields($type, $data, $path, $fields, $this->exeContext->contextValue);
+        
+        // Create the incremental result
+        $result = new IncrementalResult();
+        
+        $promise = $this->getPromise($resultData);
+        if ($promise !== null) {
+            return $promise->then(function ($resolvedData) use ($id, $deferredExecutor) {
+                $result = new IncrementalResult();
+                $result->addData($id, $resolvedData);
+                $result->markCompleted($id);
+                
+                // Check if there are more fragments to execute
+                $deferredExecutor->completeFragment($id);
+                $result->setHasNext($deferredExecutor->hasPendingFragments());
+                
+                return $result;
+            });
+        }
+        
+        // Mark this fragment as completed
+        $deferredExecutor->completeFragment($id);
+        
+        // Add the data to the result
+        $result->addData($id, $resultData);
+        $result->markCompleted($id);
+        $result->setHasNext($deferredExecutor->hasPendingFragments());
+        
+        return $result;
     }
 
     /**
@@ -285,7 +376,14 @@ class ReferenceExecutor implements ExecutorImplementation
     protected function executeOperation(OperationDefinitionNode $operation, $rootValue)
     {
         $type = $this->getOperationRootType($this->exeContext->schema, $operation);
-        $fields = $this->collectFields($type, $operation->selectionSet, new \ArrayObject(), new \ArrayObject());
+        $fields = $this->collectFields(
+            $type, 
+            $operation->selectionSet, 
+            new \ArrayObject(), 
+            new \ArrayObject(),
+            null, // No parent defer usage at the root
+            null  // No defer usage at the root
+        );
         $path = [];
         // Errors from sub-fields of a NonNull type may propagate to the top level,
         // at which point we still log the error and null the parent field, which
@@ -393,7 +491,9 @@ class ReferenceExecutor implements ExecutorImplementation
         ObjectType $runtimeType,
         SelectionSetNode $selectionSet,
         \ArrayObject $fields,
-        \ArrayObject $visitedFragmentNames
+        \ArrayObject $visitedFragmentNames,
+        ?DeferUsage $parentDeferUsage,
+        ?DeferUsage $deferUsage
     ): \ArrayObject {
         $exeContext = $this->exeContext;
         foreach ($selectionSet->selections as $selection) {
@@ -415,21 +515,35 @@ class ReferenceExecutor implements ExecutorImplementation
                         break;
                     }
 
+                    $newDeferUsage = $this->getDeferUsage(
+                        $selection,
+                        $parentDeferUsage,
+                    );
+
                     $this->collectFields(
                         $runtimeType,
                         $selection->selectionSet,
                         $fields,
-                        $visitedFragmentNames
+                        $visitedFragmentNames,
+                        $parentDeferUsage,
+                        $newDeferUsage ?? $deferUsage,
                     );
                     break;
                 case $selection instanceof FragmentSpreadNode:
                     $fragName = $selection->name->value;
 
-                    if (isset($visitedFragmentNames[$fragName]) || ! $this->shouldIncludeNode($selection)) {
+                    $newDeferUsage = $this->getDeferUsage(
+                        $selection,
+                        $parentDeferUsage,
+                    );
+
+                    if ($newDeferUsage === null && (isset($visitedFragmentNames[$fragName]) || ! $this->shouldIncludeNode($selection))) {
                         break;
                     }
 
-                    $visitedFragmentNames[$fragName] = true;
+                    if ($newDeferUsage === null) {
+                        $visitedFragmentNames[$fragName] = true;
+                    }
 
                     if (! isset($exeContext->fragments[$fragName])) {
                         break;
@@ -444,7 +558,9 @@ class ReferenceExecutor implements ExecutorImplementation
                         $runtimeType,
                         $fragment->selectionSet,
                         $fields,
-                        $visitedFragmentNames
+                        $visitedFragmentNames,
+                        $parentDeferUsage,
+                        $newDeferUsage ?? $deferUsage,
                     );
                     break;
             }
@@ -482,6 +598,54 @@ class ReferenceExecutor implements ExecutorImplementation
         );
 
         return ! isset($include['if']) || $include['if'] !== false;
+    }
+
+    /**
+     * @param InlineFragmentNode|FragmentSpreadNode $node
+     *
+     * @throws \Exception
+     * @throws Error
+     */
+    protected function getDeferUsage(
+        SelectionNode $node,
+        ?DeferUsage $parentDeferUsage
+    ): ?DeferUsage {
+        $variableValues = $this->exeContext->variableValues;
+
+        $defer = Values::getDirectiveValues(
+            Directive::deferDirective(),
+            $node,
+            $variableValues
+        );
+
+        if ($defer === null) {
+            return null;
+        }
+
+        assert(is_bool($defer['if']), 'ensured by query validation');
+        assert(is_string($defer['label']), 'ensured by query validation');
+
+        if (! $defer['if']) {
+            return null;
+        }
+
+        // Get the selection set for this fragment
+        $selectionSet = null;
+        if ($node instanceof FragmentSpreadNode) {
+            $fragment = $this->exeContext->fragments[$node->name->value] ?? null;
+            if ($fragment) {
+                $selectionSet = $fragment->selectionSet;
+            }
+        } elseif ($node instanceof InlineFragmentNode) {
+            $selectionSet = $node->selectionSet;
+        }
+
+        return new DeferUsage(
+            $defer['label'],
+            $parentDeferUsage,
+            $node,
+            $selectionSet
+        );
     }
 
     /** Implements the logic to compute the key of a given fields entry. */
@@ -1282,7 +1446,9 @@ class ReferenceExecutor implements ExecutorImplementation
                         $returnType,
                         $fieldNode->selectionSet,
                         $subFieldNodes,
-                        $visitedFragmentNames
+                        $visitedFragmentNames,
+                        null, // No parent defer usage
+                        null  // No current defer usage
                     );
                 }
             }

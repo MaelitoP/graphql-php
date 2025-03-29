@@ -21,13 +21,16 @@ use GraphQL\Error\FormattedError;
  *   extensions?: array<string, mixed>
  * }
  * @phpstan-type SerializableErrors array<int, SerializableError>
+ * @phpstan-type PendingItem array{id: string, label?: string, path: array<string|int>}
  * @phpstan-type SerializableResult array{
  *     data?: array<string, mixed>,
  *     errors?: SerializableErrors,
- *     extensions?: array<string, mixed>
+ *     extensions?: array<string, mixed>,
+ *     pending?: array<PendingItem>,
+ *     hasNext?: bool
  * }
  * @phpstan-type ErrorFormatter callable(\Throwable): SerializableError
- * @phpstan-type ErrorsHandler callable(array<Error> $errors, ErrorFormatter $formatter): SerializableErrors
+ * @phpstan-type ErrorsHandler callable(array<e> $errors, ErrorFormatter $formatter): SerializableErrors
  *
  * @see \GraphQL\Tests\Executor\ExecutionResultTest
  */
@@ -50,7 +53,7 @@ class ExecutionResult implements \JsonSerializable
      *
      * @api
      *
-     * @var array<Error>
+     * @var array<e>
      */
     public array $errors = [];
 
@@ -62,6 +65,22 @@ class ExecutionResult implements \JsonSerializable
      * @var array<string, mixed>|null
      */
     public ?array $extensions = null;
+
+    /**
+     * Items pending delivery in incremental execution.
+     *
+     * @api
+     *
+     * @var array<array{id: string, label?: string, path: array<string|int>}>|null
+     */
+    public ?array $pending = null;
+
+    /**
+     * Flag indicating whether there are more incremental payloads to come.
+     *
+     * @api
+     */
+    public bool $hasNext = false;
 
     /**
      * @var callable|null
@@ -79,14 +98,23 @@ class ExecutionResult implements \JsonSerializable
 
     /**
      * @param array<string, mixed>|null $data
-     * @param array<Error>              $errors
+     * @param array<e>              $errors
      * @param array<string, mixed>      $extensions
+     * @param array<array{id: string, label?: string, path: array<string|int>}>|null $pending
+     * @param bool $hasNext
      */
-    public function __construct(array $data = null, array $errors = [], array $extensions = [])
-    {
+    public function __construct(
+        array $data = null, 
+        array $errors = [], 
+        array $extensions = [],
+        array $pending = null,
+        bool $hasNext = false
+    ) {
         $this->data = $data;
         $this->errors = $errors;
         $this->extensions = $extensions;
+        $this->pending = $pending;
+        $this->hasNext = $hasNext;
     }
 
     /**
@@ -178,6 +206,15 @@ class ExecutionResult implements \JsonSerializable
 
         if ($this->extensions !== null && $this->extensions !== []) {
             $result['extensions'] = $this->extensions;
+        }
+
+        // Add incremental delivery fields if needed
+        if ($this->pending !== null && count($this->pending) > 0) {
+            $result['pending'] = $this->pending;
+        }
+
+        if ($this->hasNext) {
+            $result['hasNext'] = true;
         }
 
         return $result;
